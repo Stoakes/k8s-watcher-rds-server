@@ -5,7 +5,53 @@ _Small golang binary watching Istio Gateway resources on Kubernetes API and serv
 ## Introduction
 
 This project is a proof of concept demonstrating how to dynamically control an Envoy Proxy based on Istio `Gateway` resources 
-on Kubernetes API.
+on Kubernetes API. 
+
+It consists of one binary watching Kubernetes API for Istio `Gateway` resources.
+If these resources are annotated with custom annotations (more details below), they are served by the binary as RDS configuration (Envoy Route Discovery Service). This configuration is then consumed by Envoy to dynamically route traffic.
+
+**Example of annotations**
+
+```yaml
+# Annotations will be interpreted as "create a Route matching * & hello.example.org hostname, /hello prefix to cluster some_service"
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: commongateway
+  annotations:
+    stoakes.github.com/cluster: some_service
+    stoakes.github.com/hostname: "*,hello.example.org"
+    stoakes.github.com/prefix: "/hello"
+spec:
+  selector:
+    app: envoy
+  servers:
+    - port:
+        number: 8000
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*"
+```
+
+**Resulting RDS configuration**
+
+```json
+{
+    "@type":"type.googleapis.com/envoy.admin.v3.RoutesConfigDump",
+ "dynamic_route_configs":[
+    {"version_info":"0",
+     "route_config":{
+        "@type":"type.googleapis.com/envoy.api.v2.RouteConfiguration",
+        "name":"rds_config_name",
+        "virtual_hosts":[
+            {"name":"commongateway-default","domains":["*","hello.example.org"],"routes":[{"match":{"prefix":"/hello"},"route":{"cluster":"some_service"}}]}
+        ]
+        },
+     "last_updated":"2020-09-29T07:06:34.357Z"}
+     ]
+}
+```
 
 ## Getting started
 
